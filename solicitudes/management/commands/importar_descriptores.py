@@ -9,7 +9,6 @@ class Command(BaseCommand):
     help = 'Importa unidades y aprendizajes esperados desde los PDFs de descriptores'
 
     def add_arguments(self, parser):
-        # Permite ejecutar sin parámetros y asumir 'descriptores' por defecto
         parser.add_argument(
             'carpeta',
             nargs='?',
@@ -18,22 +17,27 @@ class Command(BaseCommand):
             help='Nombre o ruta de la carpeta con descriptores (por defecto: descriptores)'
         )
 
+    def _guardar_ae(self, lista_aprendizajes, ae):
+        """Limpia espacios extra y evita aprendizajes duplicados en la misma unidad."""
+        ae['descripcion'] = re.sub(r'\s+', ' ', ae['descripcion']).strip()
+        if not any(item['codigo'] == ae['codigo'] for item in lista_aprendizajes):
+            lista_aprendizajes.append(ae)
+
     def procesar_texto(self, texto):
-        """
-        Extrae Unidades y Aprendizajes Esperados soportando descripciones multilínea.
-        """
-        unidades = []
-        unidad_actual = None
+        unidades_dict = {}  # Agrupa las unidades por número para evitar duplicados
+        unidad_actual_num = None
         ae_actual = None
 
-        patron_unidad = re.compile(r'^(\d+)\s*\.\s*(.+?)(?:\s*\|.*|$)', re.IGNORECASE)
-        patron_ae = re.compile(r'^(\d+\.\d+)\s+(.+)')
+        patron_unidad = re.compile(r'^(\d+)\s*\.\s*(.+)', re.IGNORECASE)
+        # Lookahead negativo (?!\.\d+) para asegurar que captura "1.1" pero NO "1.1.1"
+        patron_ae = re.compile(r'^(\d+\.\d+)(?!\.\d+)\s+(.+)')
         patron_criterio = re.compile(r'^\d+\.\d+\.\d+')
 
         palabras_ignorar = [
             "APRENDIZAJES ESPERADOS", "CRITERIOS DE EVALUACIÓN", "CONTENIDOS MINIMOS",
             "CONTENIDOS MÍNIMOS", "ACTIVIDADES MINIMAS", "ACTIVIDADES MÍNIMAS",
-            "Horas de la Unidad:", "Administrador de Asignaturas", "INACAP", "https://"
+            "Horas de la Unidad:", "Administrador de Asignaturas", "INACAP", "https://",
+            "EVALUACIÓN:", "ESTRATEGIAS", "SISTEMA DE EVALUACIÓN"
         ]
 
         for linea in texto.splitlines():
@@ -42,69 +46,83 @@ class Command(BaseCommand):
                 continue
 
             if any(ignorar in linea for ignorar in palabras_ignorar):
-                continue
-
-            # 1. Detectar Unidad de Aprendizaje
-            match_unidad = patron_unidad.match(linea)
-            if match_unidad:
-                num_u = int(match_unidad.group(1))
-                nombre_u = match_unidad.group(2).strip()
-
-                if not patron_criterio.match(linea) and len(nombre_u) > 3 and num_u < 20:
-                    if ae_actual and unidad_actual:
-                        unidad_actual['aprendizajes'].append(ae_actual)
-                        ae_actual = None
-
-                    unidad_actual = {
-                        'numero': num_u,
-                        'nombre': nombre_u[:250],
-                        'aprendizajes': []
-                    }
-                    unidades.append(unidad_actual)
-                    continue
-
-            # 2. Si detecta inicio de Criterio de Evaluación (1.1.1), cierra el AE actual
-            if patron_criterio.match(linea):
-                if ae_actual and unidad_actual:
-                    unidad_actual['aprendizajes'].append(ae_actual)
+                if ae_actual and unidad_actual_num in unidades_dict:
+                    self._guardar_ae(unidades_dict[unidad_actual_num]['aprendizajes'], ae_actual)
                     ae_actual = None
                 continue
 
-            # 3. Detectar Aprendizaje Esperado (ej: 1.1)
+            # 1. Detectar Criterio de Evaluación (ej: 1.1.1)
+            if patron_criterio.match(linea):
+                if ae_actual and unidad_actual_num in unidades_dict:
+                    self._guardar_ae(unidades_dict[unidad_actual_num]['aprendizajes'], ae_actual)
+                    ae_actual = None
+                continue
+
+            # 2. Detectar Aprendizaje Esperado (ej: 1.1)
             match_ae = patron_ae.match(linea)
-            if match_ae and unidad_actual is not None:
+            if match_ae:
                 codigo_cand = match_ae.group(1)
                 desc_cand = match_ae.group(2).strip()
 
-                if not patron_criterio.match(codigo_cand):
-                    if codigo_cand.startswith(f"{unidad_actual['numero']}."):
-                        if ae_actual:
-                            unidad_actual['aprendizajes'].append(ae_actual)
+                num_u_from_code = int(codigo_cand.split('.')[0])
+                unidad_actual_num = num_u_from_code
 
-                        ae_actual = {
-                            'codigo': codigo_cand,
-                            'descripcion': desc_cand
+                if unidad_actual_num not in unidades_dict:
+                    unidades_dict[unidad_actual_num] = {
+                        'numero': unidad_actual_num,
+                        'nombre': f"Unidad {unidad_actual_num}",
+                        'aprendizajes': []
+                    }
+
+                if ae_actual:
+                    self._guardar_ae(unidades_dict[unidad_actual_num]['aprendizajes'], ae_actual)
+
+                ae_actual = {
+                    'codigo': codigo_cand,
+                    'descripcion': desc_cand
+                }
+                continue
+
+            # 3. Detectar Unidad de Aprendizaje (ej: 1. Aportes nutricionales..)
+            match_unidad = patron_unidad.match(linea)
+            if match_unidad and not patron_criterio.match(linea):
+                num_u = int(match_unidad.group(1))
+                nombre_raw = match_unidad.group(2).strip()
+                
+                nombre_u = re.sub(r'\s*\|.*$', '', nombre_raw).strip().rstrip('.')
+                nombre_u = re.sub(r'\s+', ' ', nombre_u)
+
+                if len(nombre_u) > 2 and num_u < 20:
+                    if ae_actual and unidad_actual_num in unidades_dict:
+                        self._guardar_ae(unidades_dict[unidad_actual_num]['aprendizajes'], ae_actual)
+                        ae_actual = None
+
+                    unidad_actual_num = num_u
+
+                    if num_u not in unidades_dict:
+                        unidades_dict[num_u] = {
+                            'numero': num_u,
+                            'nombre': nombre_u[:250],
+                            'aprendizajes': []
                         }
-                        continue
+                    else:
+                        # Conservar el nombre más largo y descriptivo
+                        if len(nombre_u) > len(unidades_dict[num_u]['nombre']):
+                            unidades_dict[num_u]['nombre'] = nombre_u[:250]
+                    continue
 
-            # 4. Concatenar líneas secundarias de la descripción del AE
-            if ae_actual is not None and unidad_actual is not None:
+            # 4. Concatenar texto secundario de descripciones multilínea del AE
+            if ae_actual is not None:
                 ae_actual['descripcion'] += f" {linea}"
 
-        if ae_actual and unidad_actual:
-            unidad_actual['aprendizajes'].append(ae_actual)
+        if ae_actual and unidad_actual_num in unidades_dict:
+            self._guardar_ae(unidades_dict[unidad_actual_num]['aprendizajes'], ae_actual)
 
-        # Limpieza de espacios en blanco múltiples
-        for u in unidades:
-            for ae in u['aprendizajes']:
-                ae['descripcion'] = re.sub(r'\s+', ' ', ae['descripcion']).strip()
-
-        return unidades
+        return sorted(unidades_dict.values(), key=lambda x: x['numero'])
 
     def handle(self, *args, **options):
         nombre_carpeta = options['carpeta']
 
-        # Localizar la carpeta desde la raíz del proyecto Django
         if hasattr(settings, 'BASE_DIR'):
             ruta_carpeta = os.path.join(settings.BASE_DIR, nombre_carpeta)
             if not os.path.exists(ruta_carpeta):
@@ -117,7 +135,7 @@ class Command(BaseCommand):
             return
 
         archivos = [f for f in os.listdir(ruta_carpeta) if f.lower().endswith('.pdf')]
-        self.stdout.write(self.style.SUCCESS(f"📂 Se encontraron {len(archivos)} archivos PDF en '{ruta_carpeta}'...\n"))
+        self.stdout.write(self.style.SUCCESS(f"📂 Procesando {len(archivos)} archivos PDF en '{ruta_carpeta}'...\n"))
 
         unidades_totales = 0
         aprendizajes_totales = 0
@@ -125,7 +143,6 @@ class Command(BaseCommand):
         for archivo in archivos:
             ruta = os.path.join(ruta_carpeta, archivo)
             
-            # Buscar el código entre paréntesis en el nombre del archivo (ej: "(ASAS03)")
             match_cod = re.search(r'\((.*?)\)', archivo)
             codigo = match_cod.group(1).strip().upper() if match_cod else None
 
@@ -133,7 +150,6 @@ class Command(BaseCommand):
                 reader = PdfReader(ruta)
                 texto = "\n".join([page.extract_text() or "" for page in reader.pages])
 
-                # Buscar código en el texto del PDF si no venía en el nombre del archivo
                 if not codigo:
                     match_pdf_cod = re.search(r'\b([A-Z]{3,5}\d{2,4})\b', texto)
                     if match_pdf_cod:
@@ -152,14 +168,14 @@ class Command(BaseCommand):
                 datos_extraidos = self.procesar_texto(texto)
 
                 if not datos_extraidos:
-                    self.stdout.write(self.style.WARNING(f"⚠️ No se encontraron unidades con formato válido en {archivo}"))
+                    self.stdout.write(self.style.WARNING(f"⚠️ No se encontraron unidades válidas en {archivo}"))
                     continue
 
                 unidades_creadas = 0
                 aes_creados = 0
 
                 for asig in asignaturas:
-                    # Limpieza preventiva para actualizar con datos limpios
+                    # Limpieza total de unidades de la asignatura antes de la reinserción
                     asig.unidades.all().delete()
 
                     for d_unidad in datos_extraidos:
@@ -181,8 +197,9 @@ class Command(BaseCommand):
                 unidades_totales += unidades_creadas
                 aprendizajes_totales += aes_creados
                 
+                total_aes_doc = sum(len(u['aprendizajes']) for u in datos_extraidos)
                 self.stdout.write(self.style.SUCCESS(
-                    f"✅ [{codigo}] Procesadas {len(datos_extraidos)} unidades y {sum(len(u['aprendizajes']) for u in datos_extraidos)} AEs "
+                    f"✅ [{codigo}] Procesadas {len(datos_extraidos)} unidades y {total_aes_doc} AEs "
                     f"para {len(asignaturas)} sección(es)."
                 ))
 
