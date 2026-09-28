@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: Arial, sans-serif; color: #333333; line-height: 1.6; }
+        .container { max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; }
+        .header { background-color: #d9272e; color: #ffffff; padding: 20px; text-align: center; }
+        .content { padding: 25px; background-color: #ffffff; }
+        .table-info { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        .table-info th, .table-info td { padding: 10px 12px; border-bottom: 1px solid #eeeeee; text-align: left; font-size: 14px; }
+        .table-info th { background-color: #f8fafc; font-weight: bold; color: #1e293b; width: 35%; }
+        .footer { background-color: #f1f5f9; padding: 15px; text-align: center; font-size: 12px; color: #64748b; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2 style="margin:0;">Solicitud de Salida a Terreno</h2>
+            <p style="margin:5px 0 0 0; font-size:14px;">Portal Académico INACAP</p>
+        </div>
+        
+        <div class="content">
+            <p>Estimada Coordinación y Dirección de Carrera,</p>
+            <p>Se ha registrado una nueva solicitud de salida a terreno que requiere su revisión:</p>
+            
+            <table class="table-info">
+                <tr>
+                    <th>Docente:</th>
+                    <td>{{ solicitud.docente }}</td>
+                </tr>
+                <tr>
+                    <th>Asignatura:</th>
+                    <td>{{ solicitud.asignatura }}</td>
+                </tr>
+                <tr>
+                    <th>Unidad:</th>
+                    <td>{{ solicitud.unidad }}</td>
+                </tr>
+                <tr>
+                    <th>Aprendizaje Esperado:</th>
+                    <td>{{ solicitud.aprendizaje_esperado }}</td>
+                </tr>
+                <tr>
+                    <th>Fecha Propuesta:</th>
+                    <td><strong>{{ solicitud.fecha_salida|date:"d/m/Y" }}</strong></td>
+                </tr>
+                <tr>
+                    <th>Duración:</th>
+                    <td>{{ solicitud.duracion }} horas</td>
+                </tr>
+            </table>
+
+            <p style="margin-top: 20px;">Pueden ingresar al sistema para revisar los detalles completos de la solicitud.</p>
+        </div>
+
+        <div class="footer">
+            Este es un correo automático generado por el Portal de Salidas a Terreno - INACAP.
+        </div>
+    </div>
+</body>
+</html>

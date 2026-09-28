@@ -1,5 +1,11 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse
+from django.contrib import messages
+from django.core.mail import EmailMultiAlternatives
+from django.template.loader import render_to_string
+from django.utils.html import strip_tags
+from django.conf import settings
+
 from .models import (
     SolicitudTerreno, 
     Docente, 
@@ -8,6 +14,12 @@ from .models import (
     AprendizajeEsperado
 )
 from .forms import SolicitudForm
+
+# Correos institucionales del área
+CORREOS_COORDINACION = [
+    'ypezoa@inacap.cl',  # Coordinadora de Carrera
+    'orobles@inacap.cl',  # Director de Carrera (DC)
+]
 
 
 def lista_solicitudes(request):
@@ -23,11 +35,41 @@ def lista_solicitudes(request):
 
 
 def crear_solicitud(request):
-    """Procesa el formulario para registrar una nueva salida a terreno."""
+    """Procesa el formulario para registrar una nueva salida a terreno y notifica por correo."""
     if request.method == 'POST':
         form = SolicitudForm(request.POST)
         if form.is_valid():
-            form.save()
+            # 1. Guardar la solicitud en la base de datos
+            solicitud = form.save()
+
+            # 2. Definir destinatarios (Coordinadora + Director)
+            destinatarios = list(CORREOS_COORDINACION)
+
+            # Agregar correo del docente en copia si está disponible
+            if hasattr(solicitud, 'docente') and hasattr(solicitud.docente, 'email') and solicitud.docente.email:
+                destinatarios.append(solicitud.docente.email)
+
+            # 3. Construir y enviar el correo en HTML
+            asunto = f"[Nueva Solicitud] Salida a Terreno - {solicitud.asignatura}"
+            contexto = {'solicitud': solicitud}
+
+            try:
+                html_content = render_to_string('emails/notificacion_solicitud.html', contexto)
+                text_content = strip_tags(html_content)
+
+                email = EmailMultiAlternatives(
+                    subject=asunto,
+                    body=text_content,
+                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@inacap.cl'),
+                    to=destinatarios
+                )
+                email.attach_alternative(html_content, "text/html")
+                email.send(fail_silently=False)
+
+                messages.success(request, 'Solicitud registrada y notificada exitosamente a Coordinación y Dirección de Carrera.')
+            except Exception as e:
+                messages.warning(request, f'La solicitud fue guardada, pero ocurrió un problema al enviar el correo: {e}')
+
             return redirect('lista_solicitudes')
     else:
         form = SolicitudForm()
