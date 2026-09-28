@@ -1,4 +1,5 @@
 from django.db import models
+from django.core.exceptions import ValidationError
 
 class Docente(models.Model):
     rut = models.CharField(max_length=12, unique=True, verbose_name="RUT")
@@ -70,7 +71,7 @@ class AprendizajeEsperado(models.Model):
         ordering = ['codigo']
 
     def __str__(self):
-        return f"{self.codigo} - {self.descripcion[:60]}..."
+        return f"{self.codigo} - {self.descripcion[:70]}..."
 
 
 class SolicitudTerreno(models.Model):
@@ -99,6 +100,16 @@ class SolicitudTerreno(models.Model):
         verbose_name="Unidad de Aprendizaje"
     )
     
+    # Campo para almacenar el Aprendizaje Esperado asociado
+    aprendizaje_esperado = models.ForeignKey(
+        AprendizajeEsperado,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='solicitudes',
+        verbose_name="Aprendizaje Esperado"
+    )
+    
     fecha_propuesta = models.DateField(verbose_name="Fecha Propuesta")
     duracion_horas = models.IntegerField(null=True, blank=True, verbose_name="Duración en Horas")
     cantidad_estudiantes = models.PositiveIntegerField(verbose_name="Cantidad de Estudiantes")
@@ -112,7 +123,6 @@ class SolicitudTerreno(models.Model):
     contratada = models.BooleanField(default=False, verbose_name="¿Contratada?")
     realizada = models.BooleanField(default=False, verbose_name="¿Realizada?")
     
-    # Auditoría automática de fechas
     fecha_creacion = models.DateTimeField(auto_now_add=True, verbose_name="Fecha de Creación")
     fecha_actualizacion = models.DateTimeField(auto_now=True, verbose_name="Última Actualización")
 
@@ -120,6 +130,15 @@ class SolicitudTerreno(models.Model):
         verbose_name = "Solicitud de Terreno"
         verbose_name_plural = "Solicitudes de Terreno"
         ordering = ['-fecha_creacion']
+
+    def clean(self):
+        """Validación de integridad para asegurar que el AE pertenece a la Unidad seleccionada."""
+        super().clean()
+        if self.aprendizaje_esperado and self.unidad:
+            if self.aprendizaje_esperado.unidad_id != self.unidad_id:
+                raise ValidationError({
+                    'aprendizaje_esperado': 'El aprendizaje esperado seleccionado no pertenece a la unidad de aprendizaje indicada.'
+                })
 
     def __str__(self):
         return f"Solicitud #{self.id} - {self.asignatura.nombre} ({self.fecha_propuesta})"
