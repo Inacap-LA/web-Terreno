@@ -11,7 +11,10 @@ from .forms import SolicitudForm
 
 
 def lista_solicitudes(request):
-    # 'select_related' pre-carga las relaciones en una sola consulta SQL (evita el problema N+1)
+    """
+    Muestra la lista general de solicitudes de terreno.
+    Se utiliza select_related para traer todas las relaciones en 1 sola consulta SQL.
+    """
     solicitudes = SolicitudTerreno.objects.select_related(
         'docente', 'asignatura', 'unidad', 'aprendizaje_esperado'
     ).order_by('-fecha_propuesta')
@@ -20,6 +23,7 @@ def lista_solicitudes(request):
 
 
 def crear_solicitud(request):
+    """Procesa el formulario para registrar una nueva salida a terreno."""
     if request.method == 'POST':
         form = SolicitudForm(request.POST)
         if form.is_valid():
@@ -32,6 +36,7 @@ def crear_solicitud(request):
 
 
 def detalle_solicitud(request, pk):
+    """Muestra la información detallada de una solicitud específica."""
     solicitud = get_object_or_404(
         SolicitudTerreno.objects.select_related(
             'docente', 'asignatura', 'unidad', 'aprendizaje_esperado'
@@ -41,12 +46,14 @@ def detalle_solicitud(request, pk):
     return render(request, 'solicitudes/detalle_solicitud.html', {'solicitud': solicitud})
 
 
-# --- VISTAS AJAX PARA FILTROS DESPLEGABLES EN CASCADA ---
+# ==========================================
+# VISTAS AJAX (FILTROS DESPLEGABLES EN CASCADA)
+# ==========================================
 
 def cargar_asignaturas(request):
-    """Devuelve las asignaturas asociadas al docente seleccionado."""
+    """Devuelve en JSON las asignaturas filtradas por el docente seleccionado."""
     docente_id = request.GET.get('docente')
-    if docente_id:
+    if docente_id and docente_id.isdigit():
         asignaturas = Asignatura.objects.filter(docente_id=docente_id).order_by('codigo', 'seccion')
         data = [
             {
@@ -60,9 +67,9 @@ def cargar_asignaturas(request):
 
 
 def cargar_unidades(request):
-    """Devuelve las unidades asociadas a la asignatura seleccionada."""
+    """Devuelve en JSON las unidades filtradas por la asignatura seleccionada."""
     asignatura_id = request.GET.get('asignatura')
-    if asignatura_id:
+    if asignatura_id and asignatura_id.isdigit():
         unidades = UnidadAprendizaje.objects.filter(asignatura_id=asignatura_id).order_by('numero', 'id')
         data = [
             {
@@ -76,9 +83,9 @@ def cargar_unidades(request):
 
 
 def cargar_aprendizajes(request):
-    """Devuelve los aprendizajes esperados asociados a la unidad seleccionada."""
+    """Devuelve en JSON los aprendizajes esperados filtrados por la unidad seleccionada."""
     unidad_id = request.GET.get('unidad')
-    if unidad_id:
+    if unidad_id and unidad_id.isdigit():
         aprendizajes = AprendizajeEsperado.objects.filter(unidad_id=unidad_id).order_by('codigo')
         data = [
             {
