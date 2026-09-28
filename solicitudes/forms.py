@@ -1,5 +1,11 @@
 from django import forms
-from .models import SolicitudTerreno, Asignatura, UnidadAprendizaje, Docente
+from .models import (
+    SolicitudTerreno, 
+    Docente, 
+    Asignatura, 
+    UnidadAprendizaje, 
+    AprendizajeEsperado
+)
 
 class SolicitudForm(forms.ModelForm):
     class Meta:
@@ -8,9 +14,10 @@ class SolicitudForm(forms.ModelForm):
             'docente', 
             'asignatura', 
             'unidad', 
+            'aprendizaje_esperado',  # <-- Campo independiente
             'fecha_propuesta', 
             'duracion_horas',
-            'cantidad_estudiantes',  # <-- Se agrega este campo
+            'cantidad_estudiantes',
             'institucion_destino',
             'trabajo_a_realizar',
         ]
@@ -18,6 +25,7 @@ class SolicitudForm(forms.ModelForm):
             'docente': 'Docente',
             'asignatura': 'Asignatura',
             'unidad': 'Unidad de Aprendizaje',
+            'aprendizaje_esperado': 'Aprendizaje Esperado',
             'fecha_propuesta': 'Fecha Propuesta de Salida',
             'duracion_horas': 'Duración (en horas)',
             'cantidad_estudiantes': 'Cantidad de Estudiantes',
@@ -37,22 +45,36 @@ class SolicitudForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         
-        # Opciones iniciales para selectores dependientes
+        # Opciones iniciales vacías para los selectores dependientes
         self.fields['docente'].queryset = Docente.objects.all().order_by('nombre')
         self.fields['asignatura'].queryset = Asignatura.objects.none()
         self.fields['unidad'].queryset = UnidadAprendizaje.objects.none()
+        self.fields['aprendizaje_esperado'].queryset = AprendizajeEsperado.objects.none()
 
-        # Mantener las opciones seleccionadas en POST o revalidación
+        # Reconstrucción de querysets al enviar formulario (POST)
         if 'docente' in self.data:
             try:
                 docente_id = int(self.data.get('docente'))
                 self.fields['asignatura'].queryset = Asignatura.objects.filter(docente_id=docente_id).order_by('nombre')
             except (ValueError, TypeError):
                 pass
+        elif self.instance.pk and self.instance.docente_id:
+            self.fields['asignatura'].queryset = Asignatura.objects.filter(docente_id=self.instance.docente_id).order_by('nombre')
                 
         if 'asignatura' in self.data:
             try:
                 asignatura_id = int(self.data.get('asignatura'))
-                self.fields['unidad'].queryset = UnidadAprendizaje.objects.filter(asignatura_id=asignatura_id).order_by('nombre')
+                self.fields['unidad'].queryset = UnidadAprendizaje.objects.filter(asignatura_id=asignatura_id).order_by('numero', 'id')
             except (ValueError, TypeError):
                 pass
+        elif self.instance.pk and self.instance.asignatura_id:
+            self.fields['unidad'].queryset = UnidadAprendizaje.objects.filter(asignatura_id=self.instance.asignatura_id).order_by('numero', 'id')
+
+        if 'unidad' in self.data:
+            try:
+                unidad_id = int(self.data.get('unidad'))
+                self.fields['aprendizaje_esperado'].queryset = AprendizajeEsperado.objects.filter(unidad_id=unidad_id).order_by('codigo')
+            except (ValueError, TypeError):
+                pass
+        elif self.instance.pk and self.instance.unidad_id:
+            self.fields['aprendizaje_esperado'].queryset = AprendizajeEsperado.objects.filter(unidad_id=self.instance.unidad_id).order_by('codigo')

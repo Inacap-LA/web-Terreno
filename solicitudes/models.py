@@ -99,8 +99,6 @@ class SolicitudTerreno(models.Model):
         related_name='solicitudes',
         verbose_name="Unidad de Aprendizaje"
     )
-    
-    # Campo para almacenar el Aprendizaje Esperado asociado
     aprendizaje_esperado = models.ForeignKey(
         AprendizajeEsperado,
         on_delete=models.SET_NULL,
@@ -111,7 +109,7 @@ class SolicitudTerreno(models.Model):
     )
     
     fecha_propuesta = models.DateField(verbose_name="Fecha Propuesta")
-    duracion_horas = models.IntegerField(null=True, blank=True, verbose_name="Duración en Horas")
+    duracion_horas = models.PositiveIntegerField(null=True, blank=True, verbose_name="Duración en Horas")
     cantidad_estudiantes = models.PositiveIntegerField(verbose_name="Cantidad de Estudiantes")
     institucion_destino = models.CharField(max_length=200, verbose_name="Lugar / Destino")
     trabajo_a_realizar = models.TextField(
@@ -132,13 +130,21 @@ class SolicitudTerreno(models.Model):
         ordering = ['-fecha_creacion']
 
     def clean(self):
-        """Validación de integridad para asegurar que el AE pertenece a la Unidad seleccionada."""
+        """Validación de integridad jerárquica completa (Docente -> Asignatura -> Unidad -> Aprendizaje)."""
         super().clean()
-        if self.aprendizaje_esperado and self.unidad:
-            if self.aprendizaje_esperado.unidad_id != self.unidad_id:
-                raise ValidationError({
-                    'aprendizaje_esperado': 'El aprendizaje esperado seleccionado no pertenece a la unidad de aprendizaje indicada.'
-                })
+        errors = {}
+
+        if self.docente_id and self.asignatura_id and self.asignatura.docente_id != self.docente_id:
+            errors['asignatura'] = 'La asignatura seleccionada no pertenece al docente indicado.'
+
+        if self.asignatura_id and self.unidad_id and self.unidad.asignatura_id != self.asignatura_id:
+            errors['unidad'] = 'La unidad seleccionada no pertenece a la asignatura indicada.'
+
+        if self.unidad_id and self.aprendizaje_esperado_id and self.aprendizaje_esperado.unidad_id != self.unidad_id:
+            errors['aprendizaje_esperado'] = 'El aprendizaje esperado seleccionado no pertenece a la unidad indicada.'
+
+        if errors:
+            raise ValidationError(errors)
 
     def __str__(self):
         return f"Solicitud #{self.id} - {self.asignatura.nombre} ({self.fecha_propuesta})"
