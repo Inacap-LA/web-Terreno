@@ -1,0 +1,206 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<style>
+    /* Estilos responsivos aplicados a los campos generados por {{ form.as_p }} */
+    form p { 
+        margin-bottom: 1.25rem; 
+    }
+    
+    form label { 
+        display: block; 
+        font-weight: 600; 
+        font-size: 0.875rem; 
+        color: #374151; 
+        margin-bottom: 0.375rem; 
+    }
+    
+    /* Previene zoom automático en iPhone/Safari (font-size: 16px) y mejora la zona táctil */
+    form input[type="text"], 
+    form input[type="date"], 
+    form input[type="number"], 
+    form select, 
+    form textarea { 
+        width: 100%; 
+        min-height: 48px; /* Altura táctil ideal para pantallas móviles */
+        padding: 0.625rem 0.875rem; 
+        border: 1px solid #d1d5db; 
+        border-radius: 0.5rem; 
+        background-color: #f9fafb;
+        font-size: 16px !important; 
+        color: #1f2937;
+        box-sizing: border-box;
+        transition: all 0.2s ease-in-out;
+    }
+
+    form select {
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        overflow: hidden;
+    }
+    
+    form input:focus, form select:focus, form textarea:focus {
+        outline: none;
+        border-color: #b91c1c;
+        background-color: #ffffff;
+        box-shadow: 0 0 0 3px rgba(185, 28, 28, 0.15);
+    }
+    
+    form textarea { 
+        min-height: 110px; 
+    }
+
+    .helptext {
+        font-size: 0.75rem;
+        color: #6b7280;
+        margin-top: 0.25rem;
+        display: block;
+    }
+
+    .errorlist {
+        color: #dc2626;
+        font-size: 0.875rem;
+        margin-bottom: 0.5rem;
+        list-style-type: disc;
+        padding-left: 1.25rem;
+    }
+</style>
+
+<div class="max-w-3xl mx-auto bg-white shadow-md sm:shadow-lg rounded-xl border border-gray-200 px-4 py-5 sm:px-8 sm:py-8 my-2 sm:my-6">
+    
+    <!-- Encabezado de la tarjeta -->
+    <div class="border-b border-gray-200 pb-4 mb-6 flex items-center justify-between">
+        <h2 class="text-xl sm:text-2xl font-bold text-gray-800">Registrar Salida a Terreno</h2>
+        <span class="text-xs font-bold px-2.5 py-1 rounded bg-red-50 text-red-700 border border-red-200">INACAP</span>
+    </div>
+    
+    <form method="post" id="solicitudForm" 
+      data-asignaturas-url="{% url 'ajax_cargar_asignaturas' %}" 
+      data-unidades-url="{% url 'ajax_cargar_unidades' %}"
+      data-aprendizajes-url="{% url 'ajax_cargar_aprendizajes' %}">
+        {% csrf_token %}
+        
+        <!-- Renderizado automático de los campos del formulario -->
+        {{ form.as_p }}
+
+        <!-- Acciones: Botones apilados en móvil y alineados a la derecha en PC -->
+        <div class="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-3 mt-8 pt-4 border-t border-gray-100">
+            <a href="{% url 'lista_solicitudes' %}" 
+               class="w-full sm:w-auto px-5 py-3 text-center text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
+                Cancelar
+            </a>
+            <button type="submit" 
+                    class="w-full sm:w-auto min-h-[48px] px-6 py-3 text-sm font-semibold text-white bg-red-700 hover:bg-red-800 rounded-lg shadow-sm transition-colors flex items-center justify-center">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                Guardar Solicitud
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('solicitudForm');
+    const docenteSelect = document.getElementById('id_docente');
+    const asigSelect = document.getElementById('id_asignatura');
+    const unidadSelect = document.getElementById('id_unidad');
+    const aeSelect = document.getElementById('id_aprendizaje_esperado');
+
+    const urls = {
+        asignaturas: form.getAttribute('data-asignaturas-url'),
+        unidades: form.getAttribute('data-unidades-url'),
+        aprendizajes: form.getAttribute('data-aprendizajes-url')
+    };
+
+    function resetSelect(selectElement, placeholderText) {
+        if (selectElement) {
+            selectElement.innerHTML = `<option value="">${placeholderText}</option>`;
+        }
+    }
+
+    // 1. Docente -> Asignaturas
+    if (docenteSelect) {
+        docenteSelect.addEventListener('change', function() {
+            const docenteId = this.value;
+            
+            resetSelect(asigSelect, '- Seleccione una opción -');
+            resetSelect(unidadSelect, '- Seleccione una asignatura primero -');
+            resetSelect(aeSelect, '- Seleccione una unidad primero -');
+            
+            if (docenteId) {
+                asigSelect.innerHTML = '<option value="">Cargando asignaturas...</option>';
+                fetch(`${urls.asignaturas}?docente=${docenteId}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        resetSelect(asigSelect, '- Seleccione una opción -');
+                        if (data.length === 0) {
+                            asigSelect.innerHTML = '<option value="">No hay asignaturas asociadas</option>';
+                        } else {
+                            data.forEach(item => {
+                                asigSelect.innerHTML += `<option value="${item.id}">${item.texto}</option>`;
+                            });
+                        }
+                    })
+                    .catch(() => resetSelect(asigSelect, 'Error al cargar asignaturas'));
+            }
+        });
+    }
+
+    // 2. Asignatura -> Unidades
+    if (asigSelect) {
+        asigSelect.addEventListener('change', function() {
+            const asigId = this.value;
+            
+            resetSelect(unidadSelect, '- Seleccione una opción -');
+            resetSelect(aeSelect, '- Seleccione una unidad primero -');
+            
+            if (asigId) {
+                unidadSelect.innerHTML = '<option value="">Cargando unidades...</option>';
+                fetch(`${urls.unidades}?asignatura=${asigId}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        resetSelect(unidadSelect, '- Seleccione una opción -');
+                        if (data.length === 0) {
+                            unidadSelect.innerHTML = '<option value="">No hay unidades registradas</option>';
+                        } else {
+                            data.forEach(item => {
+                                const texto = item.texto || item.nombre;
+                                unidadSelect.innerHTML += `<option value="${item.id}">${texto}</option>`;
+                            });
+                        }
+                    })
+                    .catch(() => resetSelect(unidadSelect, 'Error al cargar unidades'));
+            }
+        });
+    }
+
+    // 3. Unidad -> Aprendizajes Esperados
+    if (unidadSelect) {
+        unidadSelect.addEventListener('change', function() {
+            const unidadId = this.value;
+            
+            resetSelect(aeSelect, '- Seleccione una opción -');
+            
+            if (unidadId) {
+                if (aeSelect) aeSelect.innerHTML = '<option value="">Cargando aprendizajes esperados...</option>';
+                fetch(`${urls.aprendizajes}?unidad=${unidadId}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        resetSelect(aeSelect, '- Seleccione una opción -');
+                        if (data.length === 0) {
+                            if (aeSelect) aeSelect.innerHTML = '<option value="">No hay aprendizajes registrados</option>';
+                        } else {
+                            data.forEach(item => {
+                                if (aeSelect) aeSelect.innerHTML += `<option value="${item.id}">${item.texto}</option>`;
+                            });
+                        }
+                    })
+                    .catch(() => resetSelect(aeSelect, 'Error al cargar aprendizajes'));
+            }
+        });
+    }
+});
+</script>
+{% endblock %}
