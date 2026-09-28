@@ -17,26 +17,31 @@ class Command(BaseCommand):
             help='Nombre o ruta de la carpeta con descriptores (por defecto: descriptores)'
         )
 
-    def _guardar_ae(self, lista_aprendizajes, ae):
-        """Limpia espacios extra y evita aprendizajes duplicados en la misma unidad."""
-        ae['descripcion'] = re.sub(r'\s+', ' ', ae['descripcion']).strip()
-        if not any(item['codigo'] == ae['codigo'] for item in lista_aprendizajes):
-            lista_aprendizajes.append(ae)
+    def _limpiar_espacios(self, texto):
+        """Remueve saltos de línea y espacios dobles/múltiples."""
+        return re.sub(r'\s+', ' ', texto).strip()
 
     def procesar_texto(self, texto):
-        unidades_dict = {}  # Agrupa las unidades por número para evitar duplicados
-        unidad_actual_num = None
+        unidades = []
+        unidad_actual = None
         ae_actual = None
 
-        patron_unidad = re.compile(r'^(\d+)\s*\.\s*(.+)', re.IGNORECASE)
-        # Lookahead negativo (?!\.\d+) para asegurar que captura "1.1" pero NO "1.1.1"
+        # Captura estrictamente las líneas con el formato: "2 . Nombre de Unidad | Horas de la Unidad: ..."
+        patron_unidad_encabezado = re.compile(
+            r'^(\d+)\s*\.\s*(.+?)\s*\|\s*Horas\s+de\s+la\s+Unidad', 
+            re.IGNORECASE
+        )
+        
+        # Captura Aprendizajes Esperados (ej. 1.1, 2.1) ignorando criterios (1.1.1)
         patron_ae = re.compile(r'^(\d+\.\d+)(?!\.\d+)\s+(.+)')
+        
+        # Captura Criterios de Evaluación (ej. 1.1.1)
         patron_criterio = re.compile(r'^\d+\.\d+\.\d+')
 
         palabras_ignorar = [
             "APRENDIZAJES ESPERADOS", "CRITERIOS DE EVALUACIÓN", "CONTENIDOS MINIMOS",
             "CONTENIDOS MÍNIMOS", "ACTIVIDADES MINIMAS", "ACTIVIDADES MÍNIMAS",
-            "Horas de la Unidad:", "Administrador de Asignaturas", "INACAP", "https://",
+            "Administrador de Asignaturas", "INACAP", "https://",
             "EVALUACIÓN:", "ESTRATEGIAS", "SISTEMA DE EVALUACIÓN"
         ]
 
@@ -45,80 +50,72 @@ class Command(BaseCommand):
             if not linea:
                 continue
 
+            # 1. Detectar el inicio de Unidad por su encabezado con 'Horas de la Unidad'
+            match_unidad = patron_unidad_encabezado.match(linea)
+            if match_unidad:
+                # Si había un AE acumulándose, lo guardamos antes de cambiar de unidad
+                if ae_actual and unidad_actual:
+                    ae_actual['descripcion'] = self._limpiar_espacios(ae_actual['descripcion'])
+                    unidad_actual['aprendizajes'].append(ae_actual)
+                    ae_actual = None
+
+                num_u = int(match_unidad.group(1))
+                # Limpiar posibles puntos suspensivos o símbolos finales al final del nombre
+                nombre_u = match_unidad.group(2).strip().rstrip('.')
+                nombre_u = self._limpiar_espacios(nombre_u)
+
+                unidad_actual = {
+                    'numero': num_u,
+                    'nombre': nombre_u[:250],
+                    'aprendizajes': []
+                }
+                unidades.append(unidad_actual)
+                continue
+
+            # Ignorar palabras clave de títulos de tabla
             if any(ignorar in linea for ignorar in palabras_ignorar):
-                if ae_actual and unidad_actual_num in unidades_dict:
-                    self._guardar_ae(unidades_dict[unidad_actual_num]['aprendizajes'], ae_actual)
+                if ae_actual and unidad_actual:
+                    ae_actual['descripcion'] = self._limpiar_espacios(ae_actual['descripcion'])
+                    unidad_actual['aprendizajes'].append(ae_actual)
                     ae_actual = None
                 continue
 
-            # 1. Detectar Criterio de Evaluación (ej: 1.1.1)
+            # 2. Detectar inicio de Criterio de Evaluación (1.1.1) -> Detiene acumulación del AE
             if patron_criterio.match(linea):
-                if ae_actual and unidad_actual_num in unidades_dict:
-                    self._guardar_ae(unidades_dict[unidad_actual_num]['aprendizajes'], ae_actual)
+                if ae_actual and unidad_actual:
+                    ae_actual['descripcion'] = self._limpiar_espacios(ae_actual['descripcion'])
+                    unidad_actual['aprendizajes'].append(ae_actual)
                     ae_actual = None
                 continue
 
-            # 2. Detectar Aprendizaje Esperado (ej: 1.1)
+            # 3. Detectar Aprendizaje Esperado (ej: 1.1, 2.1)
             match_ae = patron_ae.match(linea)
-            if match_ae:
+            if match_ae and unidad_actual is not None:
                 codigo_cand = match_ae.group(1)
                 desc_cand = match_ae.group(2).strip()
 
-                num_u_from_code = int(codigo_cand.split('.')[0])
-                unidad_actual_num = num_u_from_code
+                # Garantizar que el AE (ej 2.1) pertenezca a la Unidad actual (ej Unidad 2)
+                if codigo_cand.startswith(f"{unidad_actual['numero']}."):
+                    if ae_actual:
+                        ae_actual['descripcion'] = self._limpiar_espacios(ae_actual['descripcion'])
+                        unidad_actual['aprendizajes'].append(ae_actual)
 
-                if unidad_actual_num not in unidades_dict:
-                    unidades_dict[unidad_actual_num] = {
-                        'numero': unidad_actual_num,
-                        'nombre': f"Unidad {unidad_actual_num}",
-                        'aprendizajes': []
+                    ae_actual = {
+                        'codigo': codigo_cand,
+                        'descripcion': desc_cand
                     }
-
-                if ae_actual:
-                    self._guardar_ae(unidades_dict[unidad_actual_num]['aprendizajes'], ae_actual)
-
-                ae_actual = {
-                    'codigo': codigo_cand,
-                    'descripcion': desc_cand
-                }
-                continue
-
-            # 3. Detectar Unidad de Aprendizaje (ej: 1. Aportes nutricionales..)
-            match_unidad = patron_unidad.match(linea)
-            if match_unidad and not patron_criterio.match(linea):
-                num_u = int(match_unidad.group(1))
-                nombre_raw = match_unidad.group(2).strip()
-                
-                nombre_u = re.sub(r'\s*\|.*$', '', nombre_raw).strip().rstrip('.')
-                nombre_u = re.sub(r'\s+', ' ', nombre_u)
-
-                if len(nombre_u) > 2 and num_u < 20:
-                    if ae_actual and unidad_actual_num in unidades_dict:
-                        self._guardar_ae(unidades_dict[unidad_actual_num]['aprendizajes'], ae_actual)
-                        ae_actual = None
-
-                    unidad_actual_num = num_u
-
-                    if num_u not in unidades_dict:
-                        unidades_dict[num_u] = {
-                            'numero': num_u,
-                            'nombre': nombre_u[:250],
-                            'aprendizajes': []
-                        }
-                    else:
-                        # Conservar el nombre más largo y descriptivo
-                        if len(nombre_u) > len(unidades_dict[num_u]['nombre']):
-                            unidades_dict[num_u]['nombre'] = nombre_u[:250]
                     continue
 
-            # 4. Concatenar texto secundario de descripciones multilínea del AE
-            if ae_actual is not None:
+            # 4. Si hay un AE activo, seguir concatenando líneas secundarias
+            if ae_actual is not None and unidad_actual is not None:
                 ae_actual['descripcion'] += f" {linea}"
 
-        if ae_actual and unidad_actual_num in unidades_dict:
-            self._guardar_ae(unidades_dict[unidad_actual_num]['aprendizajes'], ae_actual)
+        # Guardar el último AE si quedó en memoria
+        if ae_actual and unidad_actual:
+            ae_actual['descripcion'] = self._limpiar_espacios(ae_actual['descripcion'])
+            unidad_actual['aprendizajes'].append(ae_actual)
 
-        return sorted(unidades_dict.values(), key=lambda x: x['numero'])
+        return unidades
 
     def handle(self, *args, **options):
         nombre_carpeta = options['carpeta']
@@ -135,7 +132,7 @@ class Command(BaseCommand):
             return
 
         archivos = [f for f in os.listdir(ruta_carpeta) if f.lower().endswith('.pdf')]
-        self.stdout.write(self.style.SUCCESS(f"📂 Procesando {len(archivos)} archivos PDF en '{ruta_carpeta}'...\n"))
+        self.stdout.write(self.style.SUCCESS(f"📂 Procesando {len(archivos)} descriptores PDF desde '{ruta_carpeta}'...\n"))
 
         unidades_totales = 0
         aprendizajes_totales = 0
@@ -156,7 +153,7 @@ class Command(BaseCommand):
                         codigo = match_pdf_cod.group(1).upper()
 
                 if not codigo:
-                    self.stdout.write(self.style.WARNING(f"⚠️ No se pudo determinar el código para {archivo}"))
+                    self.stdout.write(self.style.WARNING(f"⚠️ No se pudo determinar el código de asignatura en {archivo}"))
                     continue
 
                 asignaturas = list(Asignatura.objects.filter(codigo=codigo))
@@ -175,7 +172,7 @@ class Command(BaseCommand):
                 aes_creados = 0
 
                 for asig in asignaturas:
-                    # Limpieza total de unidades de la asignatura antes de la reinserción
+                    # Limpieza previa de la asignatura
                     asig.unidades.all().delete()
 
                     for d_unidad in datos_extraidos:
@@ -199,7 +196,7 @@ class Command(BaseCommand):
                 
                 total_aes_doc = sum(len(u['aprendizajes']) for u in datos_extraidos)
                 self.stdout.write(self.style.SUCCESS(
-                    f"✅ [{codigo}] Procesadas {len(datos_extraidos)} unidades y {total_aes_doc} AEs "
+                    f"✅ [{codigo}] Extraídas {len(datos_extraidos)} unidades y {total_aes_doc} AEs "
                     f"para {len(asignaturas)} sección(es)."
                 ))
 
@@ -207,5 +204,5 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.ERROR(f"❌ Error al procesar {archivo}: {e}"))
 
         self.stdout.write(self.style.SUCCESS(
-            f"\n🎉 ¡Proceso finalizado! Se registraron {unidades_totales} unidades y {aprendizajes_totales} aprendizajes esperados."
+            f"\n🎉 ¡Importación lista! Se registraron {unidades_totales} unidades y {aprendizajes_totales} aprendizajes esperados."
         ))
