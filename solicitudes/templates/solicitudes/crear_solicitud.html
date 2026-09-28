@@ -2,8 +2,11 @@
 
 {% block content %}
 <style>
-    /* Estilos mejorados para adaptar el formulario por defecto de Django a Tailwind */
-    form p { margin-bottom: 1.25rem; }
+    /* Estilos responsivos aplicados a los campos generados por {{ form.as_p }} */
+    form p { 
+        margin-bottom: 1.25rem; 
+    }
+    
     form label { 
         display: block; 
         font-weight: 600; 
@@ -11,32 +14,49 @@
         color: #374151; 
         margin-bottom: 0.375rem; 
     }
+    
+    /* Previene zoom automático en iPhone/Safari (font-size: 16px) y mejora la zona táctil */
     form input[type="text"], 
     form input[type="date"], 
     form input[type="number"], 
     form select, 
     form textarea { 
         width: 100%; 
+        min-height: 48px; /* Altura táctil ideal para pantallas móviles */
         padding: 0.625rem 0.875rem; 
         border: 1px solid #d1d5db; 
         border-radius: 0.5rem; 
         background-color: #f9fafb;
-        font-size: 0.875rem;
+        font-size: 16px !important; 
+        color: #1f2937;
+        box-sizing: border-box;
         transition: all 0.2s ease-in-out;
     }
+
+    form select {
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        overflow: hidden;
+    }
+    
     form input:focus, form select:focus, form textarea:focus {
         outline: none;
         border-color: #b91c1c;
         background-color: #ffffff;
         box-shadow: 0 0 0 3px rgba(185, 28, 28, 0.15);
     }
-    form textarea { min-height: 100px; }
+    
+    form textarea { 
+        min-height: 110px; 
+    }
+
     .helptext {
         font-size: 0.75rem;
         color: #6b7280;
         margin-top: 0.25rem;
         display: block;
     }
+
     .errorlist {
         color: #dc2626;
         font-size: 0.875rem;
@@ -46,10 +66,12 @@
     }
 </style>
 
-<div class="max-w-3xl mx-auto bg-white shadow-lg rounded-xl border border-gray-100 px-8 pt-6 pb-8 my-6">
+<div class="max-w-3xl mx-auto bg-white shadow-md sm:shadow-lg rounded-xl border border-gray-200 px-4 py-5 sm:px-8 sm:py-8 my-2 sm:my-6">
+    
+    <!-- Encabezado de la tarjeta -->
     <div class="border-b border-gray-200 pb-4 mb-6 flex items-center justify-between">
-        <h2 class="text-2xl font-bold text-gray-800">Registrar Salida a Terreno</h2>
-        <span class="text-xs font-semibold px-2.5 py-1 rounded bg-red-50 text-red-700 border border-red-200">INACAP</span>
+        <h2 class="text-xl sm:text-2xl font-bold text-gray-800">Registrar Salida a Terreno</h2>
+        <span class="text-xs font-bold px-2.5 py-1 rounded bg-red-50 text-red-700 border border-red-200">INACAP</span>
     </div>
     
     <form method="post" id="solicitudForm" 
@@ -58,16 +80,17 @@
       data-aprendizajes-url="{% url 'ajax_cargar_aprendizajes' %}">
         {% csrf_token %}
         
-        <!-- Renderizado de los campos del formulario -->
+        <!-- Renderizado automático de los campos del formulario -->
         {{ form.as_p }}
 
-        <div class="flex items-center justify-end space-x-3 mt-8 pt-4 border-t border-gray-100">
+        <!-- Acciones: Botones apilados en móvil y alineados a la derecha en PC -->
+        <div class="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-3 mt-8 pt-4 border-t border-gray-100">
             <a href="{% url 'lista_solicitudes' %}" 
-               class="px-5 py-2.5 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
+               class="w-full sm:w-auto px-5 py-3 text-center text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
                 Cancelar
             </a>
             <button type="submit" 
-                    class="px-6 py-2.5 text-sm font-semibold text-white bg-red-700 hover:bg-red-800 rounded-lg shadow-sm transition-colors flex items-center">
+                    class="w-full sm:w-auto min-h-[48px] px-6 py-3 text-sm font-semibold text-white bg-red-700 hover:bg-red-800 rounded-lg shadow-sm transition-colors flex items-center justify-center">
                 <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
                 </svg>

@@ -6,19 +6,39 @@
     <title>Salidas a Terreno - INACAP</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100 font-sans leading-normal tracking-normal">
-    <nav class="bg-red-700 p-4 text-white shadow-md">
-        <div class="container mx-auto flex justify-between items-center">
-            <h1 class="text-xl font-bold">Portal Salidas a Terreno</h1>
-            <div>
-                <a href="{% url 'lista_solicitudes' %}" class="px-3 py-2 hover:bg-red-800 rounded">Mis Solicitudes</a>
-                <a href="{% url 'crear_solicitud' %}" class="bg-white text-red-700 px-3 py-2 rounded font-semibold hover:bg-gray-100">Nueva Solicitud</a>
+<body class="bg-gray-100 font-sans leading-normal tracking-normal text-gray-800 min-h-screen flex flex-col">
+    
+    <!-- Navbar Adaptable (PC y Móvil) -->
+    <nav class="bg-red-700 text-white shadow-md sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex flex-col sm:flex-row justify-between items-center py-3 sm:py-4 gap-3 sm:gap-0">
+                
+                <!-- Título / Marca -->
+                <a href="{% url 'lista_solicitudes' %}" class="flex items-center space-x-2 text-lg sm:text-xl font-bold tracking-tight hover:opacity-90">
+                    <span class="bg-white text-red-700 text-xs px-2 py-0.5 rounded font-extrabold uppercase">INACAP</span>
+                    <span>Portal Salidas a Terreno</span>
+                </a>
+
+                <!-- Botones de Navegación -->
+                <div class="flex items-center space-x-2 sm:space-x-3 w-full sm:w-auto justify-center">
+                    <a href="{% url 'lista_solicitudes' %}" 
+                       class="px-3 py-2 rounded-lg text-xs sm:text-sm font-medium hover:bg-red-800 transition-colors text-center flex-1 sm:flex-none">
+                       Mis Solicitudes
+                    </a>
+                    <a href="{% url 'crear_solicitud' %}" 
+                       class="bg-white text-red-700 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-bold shadow-sm hover:bg-gray-100 transition-colors text-center flex-1 sm:flex-none">
+                       + Nueva Solicitud
+                    </a>
+                </div>
+
             </div>
         </div>
     </nav>
 
-    <main class="container mx-auto p-6">
+    <!-- Contenido Principal -->
+    <main class="flex-grow max-w-7xl w-full mx-auto px-3 sm:px-6 py-4 sm:py-8">
         {% block content %}{% endblock %}
     </main>
+
 </body>
 </html>
