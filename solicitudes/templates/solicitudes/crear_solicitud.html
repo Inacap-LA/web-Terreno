@@ -1,0 +1,80 @@
+{% extends 'solicitudes/base.html' %}
+
+{% block content %}
+<style>
+    /* Estilos rápidos para adaptar el formulario estándar de Django a Tailwind */
+    form p { margin-bottom: 1rem; }
+    form label { display: block; font-weight: 600; font-size: 0.875rem; color: #374151; margin-bottom: 0.25rem; }
+    form input, form select, form textarea { width: 100%; padding: 0.5rem; border: 1px solid #d1d5db; border-radius: 0.375rem; }
+</style>
+
+<div class="max-w-2xl mx-auto bg-white shadow-md rounded-lg px-8 pt-6 pb-8 mb-4">
+    <h2 class="text-2xl font-bold mb-6 text-gray-800 border-b pb-2">Registrar Salida a Terreno</h2>
+    
+    <form method="post" id="solicitudForm" 
+      data-asignaturas-url="{% url 'ajax_cargar_asignaturas' %}" 
+      data-unidades-url="{% url 'ajax_cargar_unidades' %}">
+        {% csrf_token %}
+        
+        <!-- Renderizado de los campos del formulario -->
+        {{ form.as_p }}
+
+        <div class="flex items-center justify-end mt-6">
+            <a href="{% url 'lista_solicitudes' %}" class="text-gray-600 hover:text-gray-800 mr-4 font-semibold">Cancelar</a>
+            <button type="submit" class="bg-red-700 hover:bg-red-800 text-white font-bold py-2 px-6 rounded">
+                Guardar Solicitud
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+    const docenteSelect = document.getElementById('id_docente');
+    const asigSelect = document.getElementById('id_asignatura');
+    const unidadSelect = document.getElementById('id_unidad'); // Asumiendo que el campo se llama 'unidad'
+
+    // 1. Cuando seleccionas un Docente -> Carga sus Asignaturas
+    docenteSelect.addEventListener('change', function() {
+        const url = document.getElementById('solicitudForm').getAttribute('data-asignaturas-url');
+        const docenteId = this.value;
+        
+        // Limpiamos los selectores dependientes
+        asigSelect.innerHTML = '<option value="">- Seleccione una opción -</option>';
+        if (unidadSelect) {
+            unidadSelect.innerHTML = '<option value="">- Seleccione una opción -</option>';
+        }
+        
+        if (docenteId) {
+            fetch(`${url}?docente=${docenteId}`)
+            .then(response => response.json())
+            .then(data => {
+                data.forEach(asig => {
+                    asigSelect.innerHTML += `<option value="${asig.id}">${asig.texto}</option>`;
+                });
+            });
+        }
+    });
+
+    // 2. Cuando seleccionas una Asignatura -> Carga sus Unidades
+    if (asigSelect) {
+        asigSelect.addEventListener('change', function() {
+            const url = document.getElementById('solicitudForm').getAttribute('data-unidades-url');
+            const asigId = this.value;
+            
+            if (unidadSelect) {
+                unidadSelect.innerHTML = '<option value="">- Seleccione una opción -</option>';
+                
+                if (asigId) {
+                    fetch(`${url}?asignatura=${asigId}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        data.forEach(unidad => {
+                            unidadSelect.innerHTML += `<option value="${unidad.id}">${unidad.nombre}</option>`;
+                        });
+                    });
+                }
+            }
+        });
+    }
+</script>
+{% endblock %}

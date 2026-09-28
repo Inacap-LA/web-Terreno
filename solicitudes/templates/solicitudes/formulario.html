@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Solicitud de salida a terreno</title>
+</head>
+<body>
+    <h1>Solicitud de salida a terreno</h1>
+    <form method="POST">
+        {% csrf_token %} <!-- Esto es seguridad obligatoria de Django -->
+        {{ form.as_p }} <!-- Esto imprime tu formulario mágicamente -->
+        <button type="submit">Ingresar solicitud</button>
+    </form>
+</body>
+</html>

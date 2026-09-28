@@ -1,0 +1,48 @@
+{% extends 'solicitudes/base.html' %}
+
+{% block content %}
+<div class="bg-white shadow rounded-lg p-6">
+    <div class="flex justify-between items-center mb-6">
+        <h2 class="text-2xl font-bold text-gray-800">Historial de Solicitudes</h2>
+        <a href="{% url 'crear_solicitud' %}" class="bg-red-700 hover:bg-red-800 text-white font-bold py-2 px-4 rounded">
+            + Nueva Solicitud
+        </a>
+    </div>
+
+    <div class="overflow-x-auto">
+        <table class="min-w-full bg-white border border-gray-200">
+            <thead class="bg-gray-100">
+                <tr>
+                    <th class="py-2 px-4 border-b text-left text-sm font-semibold text-gray-700">Asignatura</th>
+                    <th class="py-2 px-4 border-b text-left text-sm font-semibold text-gray-700">Docente</th>
+                    <th class="py-2 px-4 border-b text-left text-sm font-semibold text-gray-700">Fecha Propuesta</th>
+                    <th class="py-2 px-4 border-b text-left text-sm font-semibold text-gray-700">Destino</th>
+                    <th class="py-2 px-4 border-b text-left text-sm font-semibold text-gray-700">Estado</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for solicitud in solicitudes %}
+                <tr class="hover:bg-gray-50">
+                    <td class="py-3 px-4 border-b text-sm text-gray-800">{{ solicitud.asignatura.nombre }}</td>
+                    <td class="py-3 px-4 border-b text-sm text-gray-600">{{ solicitud.docente.nombre }}</td>
+                    <td class="py-3 px-4 border-b text-sm text-gray-600">{{ solicitud.fecha_propuesta|date:"d M Y" }}</td>
+                    <td class="py-3 px-4 border-b text-sm text-gray-600">{{ solicitud.institucion_destino }}</td>
+                    <td class="py-3 px-4 border-b text-sm">
+                        <span class="px-2 py-1 text-xs font-semibold rounded-full 
+                            {% if solicitud.estado == 'PENDIENTE' %} bg-yellow-100 text-yellow-800
+                            {% elif solicitud.estado == 'APROBADA' %} bg-green-100 text-green-800
+                            {% else %} bg-red-100 text-red-800 {% endif %}">
+                            {{ solicitud.estado }}
+                        </span>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="py-4 text-center text-gray-500">No hay solicitudes registradas aún.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

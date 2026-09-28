@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Salidas a Terreno - INACAP</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 font-sans leading-normal tracking-normal">
+    <nav class="bg-red-700 p-4 text-white shadow-md">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-xl font-bold">Portal Salidas a Terreno</h1>
+            <div>
+                <a href="{% url 'lista_solicitudes' %}" class="px-3 py-2 hover:bg-red-800 rounded">Mis Solicitudes</a>
+                <a href="{% url 'crear_solicitud' %}" class="bg-white text-red-700 px-3 py-2 rounded font-semibold hover:bg-gray-100">Nueva Solicitud</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container mx-auto p-6">
+        {% block content %}{% endblock %}
+    </main>
+</body>
+</html>
