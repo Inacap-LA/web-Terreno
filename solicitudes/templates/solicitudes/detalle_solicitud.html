@@ -27,6 +27,10 @@
             <p class="text-base text-gray-800">{{ solicitud.institucion_destino }}</p>
         </div>
         <div>
+            <p class="text-sm font-semibold text-gray-500">Fecha de Solicitud:</p>
+            <p class="text-base text-gray-800">{{ solicitud.fecha_creacion|date:"d/m/Y H:i" }} hrs</p>
+        </div>
+        <div>
             <p class="text-sm font-semibold text-gray-500">Fecha Propuesta:</p>
             <p class="text-base text-gray-800">{{ solicitud.fecha_propuesta|date:"d/m/Y" }}</p>
         </div>
