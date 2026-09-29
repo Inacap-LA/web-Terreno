@@ -14,7 +14,7 @@ class SolicitudForm(forms.ModelForm):
             'docente', 
             'asignatura', 
             'unidad', 
-            'aprendizaje_esperado',  # <-- Campo independiente
+            'aprendizaje_esperado',
             'fecha_propuesta', 
             'duracion_horas',
             'cantidad_estudiantes',
@@ -55,11 +55,12 @@ class SolicitudForm(forms.ModelForm):
         if 'docente' in self.data:
             try:
                 docente_id = int(self.data.get('docente'))
-                self.fields['asignatura'].queryset = Asignatura.objects.filter(docente_id=docente_id).order_by('nombre')
+                # Búsqueda actualizada usando docentes__id
+                self.fields['asignatura'].queryset = Asignatura.objects.filter(docentes__id=docente_id).order_by('codigo', 'seccion')
             except (ValueError, TypeError):
                 pass
         elif self.instance.pk and self.instance.docente_id:
-            self.fields['asignatura'].queryset = Asignatura.objects.filter(docente_id=self.instance.docente_id).order_by('nombre')
+            self.fields['asignatura'].queryset = Asignatura.objects.filter(docentes__id=self.instance.docente_id).order_by('codigo', 'seccion')
                 
         if 'asignatura' in self.data:
             try:
