@@ -37,7 +37,7 @@ class Command(BaseCommand):
 
         self.stdout.write(f"📖 Procesando archivo: {ruta_archivo}")
 
-        # Lista de docentes permitidos (se comparan sin tildes para evitar descalces)
+        # Lista de docentes permitidos (se comparan sin tildes para evitar diferencias)
         DOCENTES_PERMITIDOS_RAW = [
             "VALLEJOS CATRILAO GONZALO HERNÁN",
             "VIDAL CARRASCO PILAR GABRIELA",
@@ -69,6 +69,7 @@ class Command(BaseCommand):
 
             col_rut = next((c for c in df.columns if 'rut' in c.lower()), None)
             col_profesor = next((c for c in df.columns if 'profesor' in c.lower()), None)
+            col_email = next((c for c in df.columns if 'correo' in c.lower() or 'email' in c.lower()), None)
             col_codigo = next((c for c in df.columns if 'cód' in c.lower() or 'cod' in c.lower()), None)
             col_asignatura = next((c for c in df.columns if 'asignatura' in c.lower() and not any(k in c.lower() for k in ['tipo', 'cód', 'cod', 'nivel', 'pe'])), None)
             col_seccion = next((c for c in df.columns if 'sección' in c.lower() or 'seccion' in c.lower()), None)
@@ -90,6 +91,7 @@ class Command(BaseCommand):
                 if not rut or rut.lower() in ['nan', 'profesor', 'none'] or not es_permitido:
                     continue
 
+                email_profesor = str(row[col_email]).strip() if col_email and pd.notna(row[col_email]) else None
                 codigo_asig = str(row[col_codigo]).strip().upper()
                 nombre_asig = str(row[col_asignatura]).strip()
                 seccion = str(row[col_seccion]).strip() if col_seccion and pd.notna(row[col_seccion]) else "Por definir"
@@ -97,26 +99,31 @@ class Command(BaseCommand):
                 # 1. Crear o recuperar Docente
                 docente, creado = Docente.objects.get_or_create(
                     rut=rut,
-                    defaults={'nombre': nombre_profesor}
+                    defaults={'nombre': nombre_profesor, 'email': email_profesor}
                 )
                 if creado:
                     docentes_creados += 1
+                elif email_profesor and not docente.email:
+                    docente.email = email_profesor
+                    docente.save()
 
-                # 2. Buscar asignatura por CÓDIGO único
-                asig = Asignatura.objects.filter(codigo=codigo_asig).first()
-                if asig:
-                    asig.docente = docente
+                # 2. Crear o recuperar Asignatura por CÓDIGO único
+                asig, asig_creada = Asignatura.objects.get_or_create(
+                    codigo=codigo_asig,
+                    defaults={
+                        'nombre': nombre_asig,
+                        'seccion': seccion
+                    }
+                )
+
+                if not asig_creada:
                     asig.nombre = nombre_asig
                     if seccion and seccion not in (asig.seccion or ""):
                         asig.seccion = f"{asig.seccion}, {seccion}" if asig.seccion else seccion
                     asig.save()
-                else:
-                    Asignatura.objects.create(
-                        codigo=codigo_asig,
-                        nombre=nombre_asig,
-                        docente=docente,
-                        seccion=seccion
-                    )
+
+                # 3. Vincular el docente usando .docentes.add()
+                asig.docentes.add(docente)
 
                 asignaturas_procesadas += 1
 

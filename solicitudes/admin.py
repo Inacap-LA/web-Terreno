@@ -28,7 +28,8 @@ def exportar_solicitudes_excel(modeladmin, request, queryset):
         'Unidad de Aprendizaje', 
         'Aprendizaje Esperado', 
         'Fecha Propuesta', 
-        'Duración (Horas)'
+        'Duración (Horas)',
+        'Estado'
     ]
     ws.append(headers)
 
@@ -63,7 +64,8 @@ def exportar_solicitudes_excel(modeladmin, request, queryset):
             str(solicitud.unidad) if solicitud.unidad else 'N/A',
             str(solicitud.aprendizaje_esperado) if solicitud.aprendizaje_esperado else 'N/A',
             fecha_str,
-            getattr(solicitud, 'duracion', '')
+            getattr(solicitud, 'duracion_horas', 'N/A'),
+            solicitud.get_estado_display() if hasattr(solicitud, 'get_estado_display') else solicitud.estado
         ]
         ws.append(row)
 
@@ -80,30 +82,41 @@ def exportar_solicitudes_excel(modeladmin, request, queryset):
     return response
 
 
-@admin.register(SolicitudTerreno)
-class SolicitudTerrenoAdmin(admin.ModelAdmin):
-    list_display = ('id', 'docente', 'asignatura', 'unidad', 'fecha_propuesta')
-    list_filter = ('docente', 'asignatura')
-    actions = [exportar_solicitudes_excel]
-
-
 @admin.register(Docente)
 class DocenteAdmin(admin.ModelAdmin):
-    list_display = ('id', 'nombre')
-    search_fields = ('nombre',)
+    list_display = ('id', 'rut', 'nombre', 'email')
+    search_fields = ('rut', 'nombre', 'email')
 
 
 @admin.register(Asignatura)
 class AsignaturaAdmin(admin.ModelAdmin):
-    list_display = ('id', 'codigo', 'nombre', 'seccion', 'docente')
-    list_filter = ('docente',)
+    list_display = ('id', 'codigo', 'nombre', 'seccion', 'get_docentes')
+    list_filter = ('docentes',)
+    search_fields = ('codigo', 'nombre', 'docentes__nombre', 'docentes__rut')
+
+    @admin.display(description='Docentes')
+    def get_docentes(self, obj):
+        """Muestra los nombres de todos los docentes asignados en la tabla del panel."""
+        return ", ".join([d.nombre for d in obj.docentes.all()]) if obj.docentes.exists() else "Sin docente"
 
 
 @admin.register(UnidadAprendizaje)
 class UnidadAprendizajeAdmin(admin.ModelAdmin):
     list_display = ('id', 'numero', 'nombre', 'asignatura')
+    list_filter = ('asignatura',)
+    search_fields = ('nombre', 'asignatura__nombre', 'asignatura__codigo')
 
 
 @admin.register(AprendizajeEsperado)
 class AprendizajeEsperadoAdmin(admin.ModelAdmin):
     list_display = ('id', 'codigo', 'descripcion', 'unidad')
+    list_filter = ('unidad__asignatura',)
+    search_fields = ('codigo', 'descripcion')
+
+
+@admin.register(SolicitudTerreno)
+class SolicitudTerrenoAdmin(admin.ModelAdmin):
+    list_display = ('id', 'docente', 'asignatura', 'unidad', 'fecha_propuesta', 'estado', 'contratada', 'realizada')
+    list_filter = ('estado', 'contratada', 'realizada', 'docente', 'asignatura')
+    search_fields = ('docente__nombre', 'asignatura__nombre', 'institucion_destino')
+    actions = [exportar_solicitudes_excel]
