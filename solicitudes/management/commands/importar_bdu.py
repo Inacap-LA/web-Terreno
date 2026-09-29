@@ -18,7 +18,6 @@ class Command(BaseCommand):
     help = 'Importa la carga docente filtrando solo a los profesores seleccionados'
 
     def add_arguments(self, parser):
-        # Parametro opcional: Si no se pasa, busca automaticamente el Excel en el proyecto
         parser.add_argument('ruta_archivo', nargs='?', type=str, default=None, help='Ruta al archivo Excel')
         parser.add_argument('--limpiar', action='store_true', help='Elimina docentes y asignaturas previas')
 
@@ -28,7 +27,7 @@ class Command(BaseCommand):
 
         base_dir = Path(settings.BASE_DIR)
 
-        # Autodetectar archivo Excel si no se especifica una ruta
+        # Autodetectar archivo Excel si no se especifica una ruta por consola
         if not ruta_archivo:
             archivos = list(base_dir.glob("*.xlsx")) + list(base_dir.glob("*.xls"))
             if not archivos:
@@ -38,7 +37,7 @@ class Command(BaseCommand):
 
         self.stdout.write(f"📖 Procesando archivo: {ruta_archivo}")
 
-        # Lista de profesores permitidos (normalizados sin tildes para evitar descalces)
+        # Lista de docentes permitidos (se comparan sin tildes para evitar descalces)
         DOCENTES_PERMITIDOS_RAW = [
             "VALLEJOS CATRILAO GONZALO HERNÁN",
             "VIDAL CARRASCO PILAR GABRIELA",
@@ -86,7 +85,6 @@ class Command(BaseCommand):
                 nombre_profesor = str(row[col_profesor]).strip()
                 nombre_norm = quitar_acentos(nombre_profesor)
 
-                # Verificar si el profesor pertenece a la lista permitida
                 es_permitido = any(permitido in nombre_norm for permitido in docentes_permitidos_norm)
 
                 if not rut or rut.lower() in ['nan', 'profesor', 'none'] or not es_permitido:
@@ -96,7 +94,7 @@ class Command(BaseCommand):
                 nombre_asig = str(row[col_asignatura]).strip()
                 seccion = str(row[col_seccion]).strip() if col_seccion and pd.notna(row[col_seccion]) else "Por definir"
 
-                # Registrar o actualizar Docente
+                # 1. Crear o recuperar Docente
                 docente, creado = Docente.objects.get_or_create(
                     rut=rut,
                     defaults={'nombre': nombre_profesor}
@@ -104,27 +102,26 @@ class Command(BaseCommand):
                 if creado:
                     docentes_creados += 1
 
-                # Registrar o actualizar Asignatura de forma segura
-                asig, a_creada = Asignatura.objects.get_or_create(
-                    codigo=codigo_asig,
-                    defaults={
-                        'nombre': nombre_asig,
-                        'seccion': seccion,
-                        'docente': docente
-                    }
-                )
-
-                if not a_creada:
-                    # Actualizar docente y sección si la asignatura ya existía
+                # 2. Buscar asignatura por CÓDIGO único
+                asig = Asignatura.objects.filter(codigo=codigo_asig).first()
+                if asig:
                     asig.docente = docente
                     asig.nombre = nombre_asig
-                    asig.seccion = seccion
+                    if seccion and seccion not in (asig.seccion or ""):
+                        asig.seccion = f"{asig.seccion}, {seccion}" if asig.seccion else seccion
                     asig.save()
+                else:
+                    Asignatura.objects.create(
+                        codigo=codigo_asig,
+                        nombre=nombre_asig,
+                        docente=docente,
+                        seccion=seccion
+                    )
 
                 asignaturas_procesadas += 1
 
             self.stdout.write(self.style.SUCCESS(
-                f'🎉 ¡Éxito! Se registraron {docentes_creados} docentes nuevos y se vincularon {asignaturas_procesadas} asignaturas.'
+                f'🎉 ¡Éxito! Se procesaron {asignaturas_procesadas} registros y hay {Docente.objects.count()} docentes guardados.'
             ))
 
         except Exception as e:
