@@ -130,7 +130,8 @@ def detalle_solicitud(request, pk):
 def cargar_asignaturas(request):
     docente_id = request.GET.get('docente')
     if docente_id and docente_id.isdigit():
-        asignaturas = Asignatura.objects.filter(docente_id=docente_id).order_by('codigo', 'seccion')
+        asignaturas = Asignatura.objects.filter(docentes__id=docente_id).order_by('codigo')
+#        asignaturas = Asignatura.objects.filter(docente_id=docente_id).order_by('codigo', 'seccion')
         data = [
             {'id': asig.id, 'texto': f"{asig.codigo} - {asig.nombre} (Sec. {asig.seccion})"} 
             for asig in asignaturas
