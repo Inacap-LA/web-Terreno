@@ -13,17 +13,15 @@ class Docente(models.Model):
         ordering = ['nombre']
 
     def __str__(self):
-        if self.email:
-            return f"{self.nombre} ({self.rut}) - {self.email}"
+        # Muestra solo Nombre y RUT
         return f"{self.nombre} ({self.rut})"
 
 
 class Asignatura(models.Model):
-    codigo = models.CharField(max_length=20, unique=True, verbose_name="Código")
+    codigo = models.CharField(max_length=20, verbose_name="Código")
     nombre = models.CharField(max_length=200, verbose_name="Nombre de Asignatura")
-    seccion = models.CharField(max_length=200, blank=True, null=True, verbose_name="Sección(es)")
+    seccion = models.CharField(max_length=200, verbose_name="Sección")
     
-    # Relación de Muchos a Muchos: Permite que varios profesores dicten la misma asignatura (ej: AGP441)
     docentes = models.ManyToManyField(
         Docente, 
         blank=True, 
@@ -34,7 +32,8 @@ class Asignatura(models.Model):
     class Meta:
         verbose_name = "Asignatura"
         verbose_name_plural = "Asignaturas"
-        ordering = ['codigo']
+        ordering = ['codigo', 'seccion']
+        unique_together = ('codigo', 'seccion')
 
     def __str__(self):
         sec_str = f" (Sec. {self.seccion})" if self.seccion else ""
@@ -48,7 +47,6 @@ class UnidadAprendizaje(models.Model):
         related_name='unidades',
         verbose_name="Asignatura"
     )
-    # CharField para soportar formatos como "1", "I" o "Unidad 1"
     numero = models.CharField(max_length=20, null=True, blank=True, verbose_name="Número de Unidad")
     nombre = models.TextField(verbose_name="Nombre / Descripción de la Unidad")
 
@@ -89,7 +87,6 @@ class SolicitudTerreno(models.Model):
         ('RECHAZADA', 'Rechazada'),
     ]
 
-    # Usar PROTECT evita que al borrar un docente o asignatura se eliminen sus solicitudes históricas
     docente = models.ForeignKey(
         Docente, 
         on_delete=models.PROTECT, 
@@ -139,11 +136,9 @@ class SolicitudTerreno(models.Model):
         ordering = ['-fecha_creacion']
 
     def clean(self):
-        """Validación de integridad jerárquica (Docente -> Asignatura -> Unidad -> Aprendizaje)."""
         super().clean()
         errors = {}
 
-        # Validar si la asignatura está asociada al docente seleccionado
         if self.docente_id and self.asignatura_id:
             if not self.asignatura.docentes.filter(id=self.docente_id).exists():
                 errors['asignatura'] = 'La asignatura seleccionada no está asociada al docente indicado.'

@@ -7,7 +7,6 @@ from solicitudes.models import Docente, Asignatura
 
 
 def quitar_acentos(texto):
-    """Normaliza texto eliminando tildes y caracteres especiales para comparaciones efectivas."""
     if not texto or pd.isna(texto):
         return ""
     texto_norm = unicodedata.normalize('NFD', str(texto))
@@ -15,7 +14,7 @@ def quitar_acentos(texto):
 
 
 class Command(BaseCommand):
-    help = 'Importa la carga docente filtrando solo a los profesores seleccionados'
+    help = 'Importa la carga docente separando asignaturas por cada sección individual'
 
     def add_arguments(self, parser):
         parser.add_argument('ruta_archivo', nargs='?', type=str, default=None, help='Ruta al archivo Excel')
@@ -27,7 +26,6 @@ class Command(BaseCommand):
 
         base_dir = Path(settings.BASE_DIR)
 
-        # Autodetectar archivo Excel si no se especifica una ruta por consola
         if not ruta_archivo:
             archivos = list(base_dir.glob("*.xlsx")) + list(base_dir.glob("*.xls"))
             if not archivos:
@@ -37,7 +35,6 @@ class Command(BaseCommand):
 
         self.stdout.write(f"📖 Procesando archivo: {ruta_archivo}")
 
-        # Lista de docentes permitidos (se comparan sin tildes para evitar diferencias)
         DOCENTES_PERMITIDOS_RAW = [
             "VALLEJOS CATRILAO GONZALO HERNÁN",
             "VIDAL CARRASCO PILAR GABRIELA",
@@ -51,7 +48,7 @@ class Command(BaseCommand):
         docentes_permitidos_norm = [quitar_acentos(d) for d in DOCENTES_PERMITIDOS_RAW]
 
         if limpiar:
-            self.stdout.write(self.style.WARNING("⚠️ Limpiando base de datos de Docentes y Asignaturas..."))
+            self.stdout.write(self.style.WARNING("⚠️ Limpiando base de datos de Asignaturas y Docentes..."))
             Asignatura.objects.all().delete()
             Docente.objects.all().delete()
 
@@ -79,7 +76,7 @@ class Command(BaseCommand):
 
             df = df.dropna(subset=[col_rut, col_asignatura])
             docentes_creados = 0
-            asignaturas_procesadas = 0
+            asignaturas_creadas = 0
 
             for _, row in df.iterrows():
                 rut = str(row[col_rut]).strip()
@@ -94,7 +91,10 @@ class Command(BaseCommand):
                 email_profesor = str(row[col_email]).strip() if col_email and pd.notna(row[col_email]) else None
                 codigo_asig = str(row[col_codigo]).strip().upper()
                 nombre_asig = str(row[col_asignatura]).strip()
-                seccion = str(row[col_seccion]).strip() if col_seccion and pd.notna(row[col_seccion]) else "Por definir"
+                secciones_raw = str(row[col_seccion]).strip() if col_seccion and pd.notna(row[col_seccion]) else "Por definir"
+
+                # Separar las secciones si vienen juntas por comas
+                secciones_list = [s.strip() for s in secciones_raw.split(',') if s.strip()]
 
                 # 1. Crear o recuperar Docente
                 docente, creado = Docente.objects.get_or_create(
@@ -107,28 +107,21 @@ class Command(BaseCommand):
                     docente.email = email_profesor
                     docente.save()
 
-                # 2. Crear o recuperar Asignatura por CÓDIGO único
-                asig, asig_creada = Asignatura.objects.get_or_create(
-                    codigo=codigo_asig,
-                    defaults={
-                        'nombre': nombre_asig,
-                        'seccion': seccion
-                    }
-                )
+                # 2. Crear un registro único por cada combinación de Código + Sección
+                for sec in secciones_list:
+                    asig, asig_creada = Asignatura.objects.get_or_create(
+                        codigo=codigo_asig,
+                        seccion=sec,
+                        defaults={'nombre': nombre_asig}
+                    )
+                    if asig_creada:
+                        asignaturas_creadas += 1
 
-                if not asig_creada:
-                    asig.nombre = nombre_asig
-                    if seccion and seccion not in (asig.seccion or ""):
-                        asig.seccion = f"{asig.seccion}, {seccion}" if asig.seccion else seccion
-                    asig.save()
-
-                # 3. Vincular el docente usando .docentes.add()
-                asig.docentes.add(docente)
-
-                asignaturas_procesadas += 1
+                    # Vincular docente
+                    asig.docentes.add(docente)
 
             self.stdout.write(self.style.SUCCESS(
-                f'🎉 ¡Éxito! Se procesaron {asignaturas_procesadas} registros y hay {Docente.objects.count()} docentes guardados.'
+                f'🎉 ¡Éxito! Se crearon {Asignatura.objects.count()} secciones de asignaturas y hay {Docente.objects.count()} docentes guardados.'
             ))
 
         except Exception as e:
